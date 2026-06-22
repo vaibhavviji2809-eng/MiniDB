@@ -19,7 +19,6 @@ class DatabaseEngine:
 
     def execute(self, sql: str):
         statement = self.parser.parse(sql)
-        plan = self.planner.plan(statement)
+        plan = self.planner.plan(statement, self.executor)
         plan = self.optimizer.optimize(plan)
         return self.executor.execute(plan)
-

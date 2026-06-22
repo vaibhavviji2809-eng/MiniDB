@@ -25,6 +25,18 @@ KEYWORDS = {
     "STRING",
     "AND",
     "OR",
+    "EXPLAIN",
+    "ANALYZE",
+    "JOIN",
+    "INNER",
+    "LEFT",
+    "RIGHT",
+    "OUTER",
+    "ON",
+    "AS",
+    "STORAGE",
+    "COLUMN",
+    "ROW",
 }
 
 
@@ -46,6 +58,10 @@ class Lexer:
                 continue
             if ch == ",":
                 tokens.append(Token("COMMA", ",", i))
+                i += 1
+                continue
+            if ch == ".":
+                tokens.append(Token("DOT", ".", i))
                 i += 1
                 continue
             if ch == ";":

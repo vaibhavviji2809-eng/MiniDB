@@ -25,7 +25,7 @@ class Page:
         return {
             "number": self.number,
             "records": [
-                {"row_id": record.row_id, "values": record.values}
+                {"row_id": record.row_id, "values": record.values, "versions": record.versions}
                 for record in self.records
             ],
         }
@@ -34,7 +34,7 @@ class Page:
     def deserialize(cls, data: dict) -> "Page":
         page = cls(data["number"])
         page.records = [
-            Record(values=row.get("values", {}), row_id=row.get("row_id"))
+            Record(values=row.get("values", {}), row_id=row.get("row_id"), versions=row.get("versions", []))
             for row in data.get("records", [])
         ]
         return page

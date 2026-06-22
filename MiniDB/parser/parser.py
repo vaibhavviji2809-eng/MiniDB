@@ -7,11 +7,14 @@ from .ast import (
     CreateTableStatement,
     DeleteStatement,
     DropTableStatement,
+    ExplainStatement,
     Identifier,
+    JoinClause,
     InsertStatement,
     Literal,
     RollbackStatement,
     SelectStatement,
+    TableRef,
     UpdateStatement,
 )
 from ..errors import ParseError
@@ -33,6 +36,9 @@ class Parser:
         return statement
 
     def _statement(self):
+        if self._match("EXPLAIN"):
+            analyze = self._match("ANALYZE")
+            return ExplainStatement(self._statement(), analyze=analyze)
         if self._match("SELECT"):
             return self._select()
         if self._match("INSERT"):
@@ -63,11 +69,24 @@ class Parser:
             while self._match("COMMA"):
                 columns.append(self._consume_identifier())
         self._consume("FROM")
-        table = self._consume_identifier()
+        table = self._table_ref()
+        joins = []
+        while self._match("JOIN", "INNER", "LEFT", "RIGHT"):
+            join_type = self.previous().type
+            if join_type in {"LEFT", "RIGHT"} and self._match("OUTER"):
+                join_type = f"{join_type} OUTER"
+                self._consume("JOIN")
+            elif join_type != "JOIN":
+                self._consume("JOIN")
+            join_table = self._table_ref()
+            condition = None
+            if self._match("ON"):
+                condition = self._expression()
+            joins.append(JoinClause(join_type, join_table, condition))
         where = None
         if self._match("WHERE"):
             where = self._expression()
-        return SelectStatement(columns, table, where)
+        return SelectStatement(columns, table, joins, where)
 
     def _insert(self):
         self._consume("INTO")
@@ -88,7 +107,15 @@ class Parser:
         while self._match("COMMA"):
             columns.append(Column(self._consume_identifier(), self._consume_type()))
         self._consume("RPAREN")
-        return CreateTableStatement(table, columns)
+        storage_format = "row"
+        if self._match("STORAGE"):
+            if self._match("COLUMN"):
+                storage_format = "column"
+            elif self._match("ROW"):
+                storage_format = "row"
+            else:
+                raise ParseError("Expected COLUMN or ROW after STORAGE")
+        return CreateTableStatement(table, columns, storage_format)
 
     def _update(self):
         table = self._consume_identifier()
@@ -122,7 +149,7 @@ class Parser:
 
     def _operand(self):
         if self._check("IDENTIFIER"):
-            return Identifier(self._advance().value)
+            return Identifier(self._qualified_identifier())
         return Literal(self._literal())
 
     def _literal(self):
@@ -137,10 +164,25 @@ class Parser:
             return Identifier(self._advance().value)
         return Literal(self._literal())
 
+    def _table_ref(self):
+        name = self._consume_identifier()
+        alias = None
+        if self._match("AS"):
+            alias = self._consume_identifier()
+        elif self._check("IDENTIFIER"):
+            alias = self._advance().value
+        return TableRef(name, alias)
+
     def _consume_identifier(self):
         if self._check("IDENTIFIER"):
-            return self._advance().value
+            return self._qualified_identifier()
         raise ParseError("Expected identifier")
+
+    def _qualified_identifier(self):
+        value = self._advance().value
+        if self._match("DOT"):
+            value = f"{value}.{self._consume_identifier()}"
+        return value
 
     def _consume_type(self):
         if self._match("INT"):

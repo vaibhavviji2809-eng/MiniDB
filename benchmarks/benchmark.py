@@ -13,6 +13,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from MiniDB.engine import DatabaseEngine
+from MiniDB.planner import PlanNode
+
 
 
 def time_block(func, repeat: int = 1):
@@ -37,6 +39,46 @@ def benchmark_minidb(rows: int):
         insert_time = time_block(insert)
         lookup_time = time_block(lambda: engine.execute("SELECT name FROM users WHERE age > 25;"))
         return {"insert_seconds": insert_time, "lookup_seconds": lookup_time}
+
+
+def benchmark_row_vs_column(rows: int):
+    with tempfile.TemporaryDirectory() as tmp:
+        row_engine = DatabaseEngine(str(Path(tmp) / "row.db"))
+        col_engine = DatabaseEngine(str(Path(tmp) / "col.db"))
+        row_engine.execute("CREATE TABLE users (id INT, name STRING, age INT);")
+        col_engine.execute("CREATE TABLE users (id INT, name STRING, age INT) STORAGE COLUMN;")
+
+        def load(engine):
+            for i in range(rows):
+                engine.execute(f'INSERT INTO users VALUES ({i},"User{i}",{20 + (i % 10)});')
+
+        row_insert = time_block(lambda: load(row_engine))
+        col_insert = time_block(lambda: load(col_engine))
+        row_select = time_block(lambda: row_engine.execute("SELECT name FROM users WHERE age > 25;"))
+        col_select = time_block(lambda: col_engine.execute("SELECT name FROM users WHERE age > 25;"))
+        return {
+            "row_store": {"insert_seconds": row_insert, "lookup_seconds": row_select},
+            "column_store": {"insert_seconds": col_insert, "lookup_seconds": col_select},
+        }
+
+
+def benchmark_join_algorithms(rows: int):
+    with tempfile.TemporaryDirectory() as tmp:
+        engine = DatabaseEngine(str(Path(tmp) / "joins.db"))
+        engine.execute("CREATE TABLE users (id INT, name STRING, age INT);")
+        engine.execute("CREATE TABLE orders (id INT, user_id INT, total INT);")
+        for i in range(rows):
+            engine.execute(f'INSERT INTO users VALUES ({i},"User{i}",{20 + (i % 10)});')
+            engine.execute(f'INSERT INTO orders VALUES ({i},{i},{100 + i});')
+        left = PlanNode("TableScan", props={"table": "users"})
+        right = PlanNode("TableScan", props={"table": "orders"})
+        executor = engine.executor
+        condition = engine.parser.parse("SELECT users.id FROM users JOIN orders ON users.id = orders.user_id;").joins[0].condition
+        timings = {}
+        for kind in ["NestedLoopJoin", "HashJoin", "MergeJoin"]:
+            node = PlanNode(kind, children=[left, right], props={"condition": condition})
+            timings[kind] = time_block(lambda: executor._execute_plan(node))
+        return timings
 
 
 def benchmark_sqlite(rows: int):
@@ -65,6 +107,8 @@ def main():
     args = parser.parse_args()
 
     print("MiniDB:", benchmark_minidb(args.rows))
+    print("RowVsColumn:", benchmark_row_vs_column(args.rows))
+    print("JoinAlgorithms:", benchmark_join_algorithms(min(args.rows, 200)))
     print("SQLite:", benchmark_sqlite(args.rows))
 
 

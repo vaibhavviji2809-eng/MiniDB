@@ -31,9 +31,23 @@ class BinaryExpression(Expression):
 
 
 @dataclass
+class TableRef:
+    name: str
+    alias: str | None = None
+
+
+@dataclass
+class JoinClause:
+    join_type: str
+    table: TableRef
+    condition: Expression | None = None
+
+
+@dataclass
 class SelectStatement(Statement):
     columns: list[str]
-    table: str
+    table: TableRef
+    joins: list[JoinClause] = field(default_factory=list)
     where: Expression | None = None
 
 
@@ -47,6 +61,7 @@ class InsertStatement(Statement):
 class CreateTableStatement(Statement):
     table: str
     columns: list[Column] = field(default_factory=list)
+    storage_format: str = "row"
 
 
 @dataclass
@@ -81,3 +96,8 @@ class CommitStatement(Statement):
 class RollbackStatement(Statement):
     pass
 
+
+@dataclass
+class ExplainStatement(Statement):
+    statement: Statement
+    analyze: bool = False

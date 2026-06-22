@@ -1,4 +1,3 @@
 from .transaction import TransactionManager
-from .lock import ReadWriteLock
+from .lock import ReaderWriterLock
 from .wal import WriteAheadLog
-

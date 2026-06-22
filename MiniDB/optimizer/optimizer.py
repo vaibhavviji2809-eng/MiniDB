@@ -1,19 +1,20 @@
 from __future__ import annotations
 
-from ..parser.ast import BinaryExpression, Literal
+from ..parser.ast import BinaryExpression, ExplainStatement, Literal, SelectStatement
 from ..planner.planner import QueryPlan
 
 
 class Optimizer:
     def optimize(self, plan: QueryPlan) -> QueryPlan:
         statement = plan.statement
-        if hasattr(statement, "where") and statement.where is not None:
-            statement.where = self._fold(statement.where)
-            if plan.scan and self._is_indexable(statement.where):
-                plan.scan.use_index = True
-                plan.scan.index_column = statement.where.left.name
-                plan.scan.index_operator = statement.where.operator
-                plan.scan.index_value = statement.where.right.value
+        if isinstance(statement, ExplainStatement):
+            statement = statement.statement
+        if isinstance(statement, SelectStatement):
+            if statement.where is not None:
+                statement.where = self._fold(statement.where)
+            for join in statement.joins:
+                if join.condition is not None:
+                    join.condition = self._fold(join.condition)
         return plan
 
     def _fold(self, expr):
@@ -46,4 +47,3 @@ class Optimizer:
 
     def _is_indexable(self, expr):
         return bool(expr and hasattr(expr, "operator") and expr.operator in {"=", ">", ">=", "<", "<="} and expr.left.__class__.__name__ == "Identifier" and expr.right.__class__.__name__ == "Literal")
-
