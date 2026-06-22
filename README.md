@@ -42,3 +42,12 @@ SELECT users.name, orders.total
 FROM users
 JOIN orders ON users.id = orders.user_id;
 ```
+
+## CLI Example
+
+```text
+MiniDB> EXPLAIN ANALYZE SELECT name FROM users WHERE age > 18;
+Project [columns=['name']]
+  IndexScan [table=users, column=age, operator=>, value=18]
+Execution Time: 6.648 ms
+```
