@@ -16,6 +16,18 @@ from MiniDB.engine import DatabaseEngine
 from MiniDB.planner import PlanNode
 
 
+def format_seconds(value: float) -> str:
+    return f"{value * 1000:.3f} ms"
+
+
+def print_table(title: str, rows: list[tuple[str, str]]):
+    print(title)
+    width = max((len(name) for name, _ in rows), default=0)
+    for name, value in rows:
+        print(f"  {name.ljust(width)}  {value}")
+    print()
+
+
 
 def time_block(func, repeat: int = 1):
     durations = []
@@ -106,10 +118,43 @@ def main():
     parser.add_argument("--rows", type=int, default=1000)
     args = parser.parse_args()
 
-    print("MiniDB:", benchmark_minidb(args.rows))
-    print("RowVsColumn:", benchmark_row_vs_column(args.rows))
-    print("JoinAlgorithms:", benchmark_join_algorithms(min(args.rows, 200)))
-    print("SQLite:", benchmark_sqlite(args.rows))
+    minidb = benchmark_minidb(args.rows)
+    row_vs_column = benchmark_row_vs_column(args.rows)
+    joins = benchmark_join_algorithms(min(args.rows, 200))
+    sqlite = benchmark_sqlite(args.rows)
+
+    print_table(
+        "MiniDB",
+        [
+            ("Insert", format_seconds(minidb["insert_seconds"])),
+            ("Lookup", format_seconds(minidb["lookup_seconds"])),
+        ],
+    )
+    print_table(
+        "Row Store",
+        [
+            ("Insert", format_seconds(row_vs_column["row_store"]["insert_seconds"])),
+            ("Lookup", format_seconds(row_vs_column["row_store"]["lookup_seconds"])),
+        ],
+    )
+    print_table(
+        "Column Store",
+        [
+            ("Insert", format_seconds(row_vs_column["column_store"]["insert_seconds"])),
+            ("Lookup", format_seconds(row_vs_column["column_store"]["lookup_seconds"])),
+        ],
+    )
+    print_table(
+        "Join Algorithms",
+        [(name.replace("Join", " Join"), format_seconds(value)) for name, value in joins.items()],
+    )
+    print_table(
+        "SQLite",
+        [
+            ("Insert", format_seconds(sqlite["insert_seconds"])),
+            ("Lookup", format_seconds(sqlite["lookup_seconds"])),
+        ],
+    )
 
 
 if __name__ == "__main__":
